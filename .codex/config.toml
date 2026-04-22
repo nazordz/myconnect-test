@@ -1,0 +1,17 @@
+[mcp_servers]
+[mcp_servers.postgres-mcp]
+command = "uvx"
+args = [
+    "postgres-mcp",
+    "--access-mode=restricted"
+]
+
+[mcp_servers.postgres-mcp.env]
+DATABASE_URI = "postgresql://localhost:5432/postgres?user=postgres&password=postgres"
+
+[mcp_servers.vscode-mcp-server]
+command = "npx"
+args = ["mcp-remote@next", "http://localhost:3030/mcp"]
+
+[mcp_servers.vscode-mcp-server.tools.get_diagnostics_code]
+approval_mode = "approve"
