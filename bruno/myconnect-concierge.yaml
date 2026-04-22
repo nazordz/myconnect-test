@@ -1,0 +1,53 @@
+name: MyConnect Concierge API
+version: 1
+baseUrl: http://localhost:3000
+
+env:
+  eventId: replace-with-event-id
+  attendeeId: replace-with-attendee-id
+  messageId: replace-with-message-id
+
+requests:
+  - name: Create Event
+    method: POST
+    path: /events
+    headers:
+      Content-Type: application/json
+    body:
+      name: MyConnect AI Day
+
+  - name: Add Attendee
+    method: POST
+    path: /events/{{eventId}}/attendees
+    headers:
+      Content-Type: application/json
+    body:
+      name: Andi
+      role: Engineer
+      skills:
+        - nestjs
+        - ai
+      lookingFor: Mencari partner diskusi AI
+      openToChat: true
+
+  - name: List Attendees
+    method: GET
+    path: /events/{{eventId}}/attendees?page=1&limit=10&skills=ai
+
+  - name: Send Concierge Message
+    method: POST
+    path: /events/{{eventId}}/concierge/messages
+    headers:
+      Content-Type: application/json
+    body:
+      attendee_id: '{{attendeeId}}'
+      message: Carikan koneksi AI yang relevan
+
+  - name: Send Feedback
+    method: POST
+    path: /events/{{eventId}}/concierge/messages/{{messageId}}/feedback
+    headers:
+      Content-Type: application/json
+    body:
+      rating: 5
+      notes: Rekomendasi sangat relevan
