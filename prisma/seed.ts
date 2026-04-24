@@ -1,11 +1,16 @@
+import { Pool } from 'pg';
+import { PrismaPg } from '@prisma/adapter-pg';
 import {
+  PrismaClient,
   ConciergeMessageRole,
   ConciergeSessionStatus,
-  PrismaClient,
   ToolCallStatus,
 } from '../src/generated/prisma/client';
 
-const prisma = new PrismaClient();
+const connectionString = `${process.env.DATABASE_URL}`;
+const pool = new Pool({ connectionString });
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({ adapter });
 
 async function main() {
   await prisma.messageFeedback.deleteMany();
@@ -56,7 +61,7 @@ async function main() {
     }),
   ]);
 
-  const [averyLink, priyaLink, jordanLink] = await Promise.all([
+  const [averyLink, priyaLink] = await Promise.all([
     prisma.eventAttendee.create({
       data: {
         eventId: event.id,
@@ -102,14 +107,15 @@ async function main() {
     },
   });
 
-  const userMessage = await prisma.conciergeMessage.create({
+  await prisma.conciergeMessage.create({
     data: {
       sessionId: session.id,
       role: ConciergeMessageRole.USER,
       content: {
         text: 'I want to meet product leaders working on enterprise AI search.',
       },
-      rawText: 'I want to meet product leaders working on enterprise AI search.',
+      rawText:
+        'I want to meet product leaders working on enterprise AI search.',
       requestId: 'seed-request-1',
     },
   });
@@ -169,7 +175,7 @@ async function main() {
 }
 
 main()
-  .catch(async (error) => {
+  .catch((error) => {
     console.error(error);
     process.exitCode = 1;
   })
