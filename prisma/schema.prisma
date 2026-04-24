@@ -1,23 +1,17 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
-  moduleFormat = "cjs"
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  moduleFormat    = "cjs"
   previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider   = "postgresql"
   extensions = [vector]
 }
-
-/// =========================
-/// ENUMS
-/// =========================
 
 enum ConciergeSessionStatus {
   ACTIVE
@@ -45,21 +39,17 @@ enum LlmProvider {
   OTHER
 }
 
-/// =========================
-/// CORE DOMAIN
-/// =========================
-
 model Event {
-  id          String   @id @default(uuid()) @db.Uuid
-  title       String
-  location    String?
-  startAt     DateTime
-  endAt       DateTime
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(uuid()) @db.Uuid
+  title     String
+  location  String?
+  startAt   DateTime @map("start_at")
+  endAt     DateTime @map("end_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  attendees   EventAttendee[]
-  sessions    ConciergeSession[]
+  attendees EventAttendee[]
+  sessions  ConciergeSession[]
 
   @@index([startAt])
   @@index([endAt])
@@ -68,16 +58,16 @@ model Event {
 }
 
 model Attendee {
-  id          String   @id @default(uuid()) @db.Uuid
-  name        String
-  headline    String?
-  bio         String?
-  company     String?
-  role        String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  headline  String?
+  bio       String?
+  company   String?
+  role      String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  eventLinks  EventAttendee[]
+  eventLinks EventAttendee[]
 
   @@index([name])
   @@index([company])
@@ -86,33 +76,29 @@ model Attendee {
 }
 
 model EventAttendee {
-  id                 String    @id @default(uuid()) @db.Uuid
-  eventId            String    @db.Uuid
-  attendeeId         String    @db.Uuid
+  id         String @id @default(uuid()) @db.Uuid
+  eventId    String @db.Uuid @map("event_id")
+  attendeeId String @db.Uuid @map("attendee_id")
 
-  /// Per-event profile fields
-  skills             String[]
-  lookingFor         String?
-  openToChat         Boolean   @default(true)
+  skills     String[]
+  lookingFor String? @map("looking_for")
+  openToChat Boolean @default(true) @map("open_to_chat")
 
-  /// Normalized/searchable text snapshot used for embeddings + hybrid search
-  profileText        String?
+  profileText String? @map("profile_text")
 
-  /// pgvector metadata
   embedding          Unsupported("vector(1536)")?
-  embeddingModel     String?
-  embeddingUpdatedAt DateTime?
+  embeddingModel     String? @map("embedding_model")
+  embeddingUpdatedAt DateTime? @map("embedding_updated_at")
 
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  event              Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  attendee           Attendee  @relation(fields: [attendeeId], references: [id], onDelete: Cascade)
+  event    Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  attendee Attendee @relation(fields: [attendeeId], references: [id], onDelete: Cascade)
 
-  sessions           ConciergeSession[]
-
-  requesterMatches   MatchSuggestion[] @relation("RequesterMatches")
-  candidateMatches   MatchSuggestion[] @relation("CandidateMatches")
+  sessions         ConciergeSession[]
+  requesterMatches MatchSuggestion[] @relation("RequesterMatches")
+  candidateMatches MatchSuggestion[] @relation("CandidateMatches")
 
   @@unique([eventId, attendeeId])
   @@index([eventId])
@@ -121,25 +107,21 @@ model EventAttendee {
   @@map("event_attendees")
 }
 
-/// =========================
-/// CONCIERGE STATE
-/// =========================
-
 model ConciergeSession {
-  id               String                  @id @default(uuid()) @db.Uuid
-  eventId          String                  @db.Uuid
-  eventAttendeeId  String                  @db.Uuid
+  id              String @id @default(uuid()) @db.Uuid
+  eventId         String @db.Uuid @map("event_id")
+  eventAttendeeId String @db.Uuid @map("event_attendee_id")
 
-  status           ConciergeSessionStatus  @default(ACTIVE)
-  lastIntent       String?
-  lastMessageAt    DateTime?
+  status        ConciergeSessionStatus @default(ACTIVE)
+  lastIntent    String? @map("last_intent")
+  lastMessageAt DateTime? @map("last_message_at")
 
-  createdAt        DateTime                @default(now())
-  updatedAt        DateTime                @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  event            Event                   @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  eventAttendee    EventAttendee           @relation(fields: [eventAttendeeId], references: [id], onDelete: Cascade)
-  messages         ConciergeMessage[]
+  event         Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventAttendee EventAttendee    @relation(fields: [eventAttendeeId], references: [id], onDelete: Cascade)
+  messages      ConciergeMessage[]
 
   @@unique([eventId, eventAttendeeId])
   @@index([eventId])
@@ -149,32 +131,28 @@ model ConciergeSession {
 }
 
 model ConciergeMessage {
-  id                String                @id @default(uuid()) @db.Uuid
-  sessionId         String                @db.Uuid
+  id        String @id @default(uuid()) @db.Uuid
+  sessionId String @db.Uuid @map("session_id")
 
-  role              ConciergeMessageRole
-  /// Structured content for persistence/resume
-  content           Json
-  /// Plain-text projection for easier debugging/logging/search
-  rawText           String?
+  role    ConciergeMessageRole
+  content Json
+  rawText String? @map("raw_text")
 
-  /// Request correlation / observability
-  requestId         String?
+  requestId String? @map("request_id")
 
-  /// LLM metadata
-  llmProvider       LlmProvider?
-  llmModel          String?
-  promptTokens      Int?
-  completionTokens  Int?
-  totalTokens       Int?
-  latencyMs         Int?
+  llmProvider      LlmProvider? @map("llm_provider")
+  llmModel         String? @map("llm_model")
+  promptTokens     Int? @map("prompt_tokens")
+  completionTokens Int? @map("completion_tokens")
+  totalTokens      Int? @map("total_tokens")
+  latencyMs        Int? @map("latency_ms")
 
-  createdAt         DateTime              @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
 
-  session           ConciergeSession      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  toolCalls         ConciergeToolCall[]
-  matches           MatchSuggestion[]
-  feedbacks         MessageFeedback[]
+  session   ConciergeSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  toolCalls ConciergeToolCall[]
+  matches   MatchSuggestion[]
+  feedbacks MessageFeedback[]
 
   @@index([sessionId, createdAt])
   @@index([requestId])
@@ -183,21 +161,21 @@ model ConciergeMessage {
 }
 
 model ConciergeToolCall {
-  id               String         @id @default(uuid()) @db.Uuid
-  messageId        String         @db.Uuid
+  id        String @id @default(uuid()) @db.Uuid
+  messageId String @db.Uuid @map("message_id")
 
-  toolName         String
-  toolCallId       String?
-  status           ToolCallStatus
+  toolName   String @map("tool_name")
+  toolCallId String? @map("tool_call_id")
+  status     ToolCallStatus
 
-  input            Json
-  output           Json?
-  latencyMs        Int?
-  errorMessage     String?
+  input        Json
+  output       Json?
+  latencyMs    Int? @map("latency_ms")
+  errorMessage String? @map("error_message")
 
-  createdAt        DateTime       @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
 
-  message          ConciergeMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  message ConciergeMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
   @@index([messageId])
   @@index([toolName])
@@ -205,31 +183,26 @@ model ConciergeToolCall {
   @@map("concierge_tool_calls")
 }
 
-/// =========================
-/// MATCH RESULTS
-/// =========================
-
 model MatchSuggestion {
-  id                       String            @id @default(uuid()) @db.Uuid
-  messageId                String            @db.Uuid
+  id        String @id @default(uuid()) @db.Uuid
+  messageId String @db.Uuid @map("message_id")
 
-  requesterEventAttendeeId String            @db.Uuid
-  candidateEventAttendeeId String            @db.Uuid
+  requesterEventAttendeeId String @db.Uuid @map("requester_event_attendee_id")
+  candidateEventAttendeeId String @db.Uuid @map("candidate_event_attendee_id")
 
-  rank                     Int
-  score                    Int
-  rationale                String
-  sharedGround             Json
-  draftIntroMessage        String?
+  rank              Int
+  score             Int
+  rationale         String
+  sharedGround      Json @map("shared_ground")
+  draftIntroMessage String? @map("draft_intro_message")
 
-  /// Optional retrieval-stage score before final AI scoring
-  searchScore              Float?
+  searchScore Float? @map("search_score")
 
-  createdAt                DateTime          @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
 
-  message                  ConciergeMessage  @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  requester                EventAttendee     @relation("RequesterMatches", fields: [requesterEventAttendeeId], references: [id], onDelete: Cascade)
-  candidate                EventAttendee     @relation("CandidateMatches", fields: [candidateEventAttendeeId], references: [id], onDelete: Cascade)
+  message   ConciergeMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  requester EventAttendee    @relation("RequesterMatches", fields: [requesterEventAttendeeId], references: [id], onDelete: Cascade)
+  candidate EventAttendee    @relation("CandidateMatches", fields: [candidateEventAttendeeId], references: [id], onDelete: Cascade)
 
   @@unique([messageId, candidateEventAttendeeId])
   @@index([messageId])
@@ -240,18 +213,14 @@ model MatchSuggestion {
   @@map("match_suggestions")
 }
 
-/// =========================
-/// FEEDBACK
-/// =========================
-
 model MessageFeedback {
-  id          String            @id @default(uuid()) @db.Uuid
-  messageId   String            @db.Uuid
-  rating      Int
-  notes       String?
-  createdAt   DateTime          @default(now())
+  id        String @id @default(uuid()) @db.Uuid
+  messageId String @db.Uuid @map("message_id")
+  rating    Int
+  notes     String?
+  createdAt DateTime @default(now()) @map("created_at")
 
-  message     ConciergeMessage  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  message ConciergeMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
   @@index([messageId])
   @@index([rating])
