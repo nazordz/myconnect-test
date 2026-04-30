@@ -28,7 +28,9 @@
   "include": [
     "src",
     "test",
-    "prisma.config.ts"
+    "prisma.config.ts",
+    "prisma/seed.ts",
+    "prisma/seed.faker.ts",
   ],
   "exclude": [
     "dist", "node_modules"

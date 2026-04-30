@@ -4,7 +4,6 @@ import {
   PrismaClient,
   ConciergeMessageRole,
   ConciergeSessionStatus,
-  ToolCallStatus,
 } from '../src/generated/prisma/client';
 
 const connectionString = `${process.env.DATABASE_URL}`;
@@ -14,11 +13,8 @@ const prisma = new PrismaClient({ adapter });
 
 async function main() {
   await prisma.messageFeedback.deleteMany();
-  await prisma.matchSuggestion.deleteMany();
-  await prisma.conciergeToolCall.deleteMany();
   await prisma.conciergeMessage.deleteMany();
   await prisma.conciergeSession.deleteMany();
-  await prisma.eventAttendee.deleteMany();
   await prisma.attendee.deleteMany();
   await prisma.event.deleteMany();
 
@@ -34,38 +30,12 @@ async function main() {
   const attendees = await Promise.all([
     prisma.attendee.create({
       data: {
+        eventId: event.id,
         name: 'Avery Chen',
         headline: 'Staff ML Engineer, DevTools AI',
         bio: 'Builds applied LLM infrastructure and observability tools.',
         company: 'ForgeLayer',
         role: 'Engineer',
-      },
-    }),
-    prisma.attendee.create({
-      data: {
-        name: 'Priya Raman',
-        headline: 'Product Lead, B2B AI Search',
-        bio: 'Ships semantic search and retrieval products for enterprise teams.',
-        company: 'Northstar Cloud',
-        role: 'Product',
-      },
-    }),
-    prisma.attendee.create({
-      data: {
-        name: 'Jordan Miles',
-        headline: 'Founder, GTM Ops Studio',
-        bio: 'Helps early-stage AI startups design repeatable sales motions.',
-        company: 'GTM Ops Studio',
-        role: 'Founder',
-      },
-    }),
-  ]);
-
-  const [averyLink, priyaLink] = await Promise.all([
-    prisma.eventAttendee.create({
-      data: {
-        eventId: event.id,
-        attendeeId: attendees[0].id,
         skills: ['rag', 'vector search', 'observability'],
         lookingFor: 'Design partners for evaluation pipelines',
         openToChat: true,
@@ -73,10 +43,14 @@ async function main() {
           'Avery is exploring retrieval quality benchmarks and evaluation tooling.',
       },
     }),
-    prisma.eventAttendee.create({
+    prisma.attendee.create({
       data: {
         eventId: event.id,
-        attendeeId: attendees[1].id,
+        name: 'Priya Raman',
+        headline: 'Product Lead, B2B AI Search',
+        bio: 'Ships semantic search and retrieval products for enterprise teams.',
+        company: 'Northstar Cloud',
+        role: 'Product',
         skills: ['product strategy', 'enterprise search', 'go-to-market'],
         lookingFor: 'Engineers building secure enterprise copilots',
         openToChat: true,
@@ -84,10 +58,14 @@ async function main() {
           'Priya is looking for implementation partners for secure AI search.',
       },
     }),
-    prisma.eventAttendee.create({
+    prisma.attendee.create({
       data: {
         eventId: event.id,
-        attendeeId: attendees[2].id,
+        name: 'Jordan Miles',
+        headline: 'Founder, GTM Ops Studio',
+        bio: 'Helps early-stage AI startups design repeatable sales motions.',
+        company: 'GTM Ops Studio',
+        role: 'Founder',
         skills: ['sales', 'partnerships', 'community'],
         lookingFor: 'AI startups preparing Series A fundraising',
         openToChat: false,
@@ -100,7 +78,7 @@ async function main() {
   const session = await prisma.conciergeSession.create({
     data: {
       eventId: event.id,
-      eventAttendeeId: averyLink.id,
+      attendeeId: attendees[0].id,
       status: ConciergeSessionStatus.ACTIVE,
       lastIntent: 'find_relevant_people',
       lastMessageAt: new Date('2026-06-10T16:10:00.000Z'),
@@ -111,12 +89,8 @@ async function main() {
     data: {
       sessionId: session.id,
       role: ConciergeMessageRole.USER,
-      content: {
-        text: 'I want to meet product leaders working on enterprise AI search.',
-      },
-      rawText:
+      message:
         'I want to meet product leaders working on enterprise AI search.',
-      requestId: 'seed-request-1',
     },
   });
 
@@ -124,40 +98,7 @@ async function main() {
     data: {
       sessionId: session.id,
       role: ConciergeMessageRole.ASSISTANT,
-      content: {
-        text: 'I found a strong match and drafted an intro.',
-      },
-      rawText: 'I found a strong match and drafted an intro.',
-      requestId: 'seed-request-1',
-    },
-  });
-
-  await prisma.conciergeToolCall.create({
-    data: {
-      messageId: assistantMessage.id,
-      toolName: 'search_attendees',
-      toolCallId: 'tool-seed-1',
-      status: ToolCallStatus.SUCCEEDED,
-      input: { query: 'enterprise search product' },
-      output: { candidates: [priyaLink.id] },
-      latencyMs: 118,
-    },
-  });
-
-  await prisma.matchSuggestion.create({
-    data: {
-      messageId: assistantMessage.id,
-      requesterEventAttendeeId: averyLink.id,
-      candidateEventAttendeeId: priyaLink.id,
-      rank: 1,
-      score: 91,
-      rationale: 'Strong overlap on enterprise retrieval and productization.',
-      sharedGround: {
-        overlap: ['enterprise search', 'RAG quality'],
-      },
-      draftIntroMessage:
-        'Avery and Priya are both focused on enterprise search quality. Worth a quick intro?',
-      searchScore: 0.89,
+      message: 'I found a strong match and drafted an intro.',
     },
   });
 

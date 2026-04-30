@@ -1,34 +1,68 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { OpenAiService } from '../openai/openai.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsService } from './events.service';
 
 describe('EventsService', () => {
   let service: EventsService;
+  const createEventMock = jest.fn();
+  const findEventMock = jest.fn();
+  const updateEventMock = jest.fn();
+  const deleteEventMock = jest.fn();
+  const createAttendeeMock = jest.fn();
+  const countAttendeesMock = jest.fn();
+  const findManyAttendeesMock = jest.fn();
+  const findUniqueOrThrowAttendeeMock = jest.fn();
+  const executeRawUnsafeMock = jest.fn();
+  const transactionMock = jest.fn();
+  const embedTextMock = jest.fn();
 
   const prismaMock = {
     event: {
-      create: jest.fn(),
-      findUnique: jest.fn(),
+      create: createEventMock,
+      findUnique: findEventMock,
+      update: updateEventMock,
+      delete: deleteEventMock,
     },
     attendee: {
-      create: jest.fn(),
+      create: createAttendeeMock,
+      count: countAttendeesMock,
+      findMany: findManyAttendeesMock,
+      findUniqueOrThrow: findUniqueOrThrowAttendeeMock,
     },
-    eventAttendee: {
-      upsert: jest.fn(),
-      count: jest.fn(),
-      findMany: jest.fn(),
+    $transaction: transactionMock,
+  };
+
+  const txMock = {
+    attendee: {
+      create: createAttendeeMock,
     },
-    $transaction: jest.fn(),
-  } as unknown as PrismaService;
+    $executeRawUnsafe: executeRawUnsafeMock,
+  };
+
+  const openAiMock = {
+    embedText: embedTextMock,
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    transactionMock.mockImplementation((input) => {
+      if (typeof input === 'function') {
+        return input(txMock);
+      }
+      return Promise.all(input);
+    });
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         EventsService,
         {
           provide: PrismaService,
           useValue: prismaMock,
+        },
+        {
+          provide: OpenAiService,
+          useValue: openAiMock,
         },
       ],
     }).compile();
@@ -37,7 +71,7 @@ describe('EventsService', () => {
   });
 
   it('creates an event', async () => {
-    (prismaMock.event.create as jest.Mock).mockResolvedValue({ id: 'event-1' });
+    createEventMock.mockResolvedValue({ id: 'event-1' });
 
     const result = await service.createEvent({
       title: 'Demo Event',
@@ -47,18 +81,19 @@ describe('EventsService', () => {
     });
 
     expect(result).toEqual({ id: 'event-1' });
-    expect(prismaMock.event.create).toHaveBeenCalled();
+    expect(createEventMock).toHaveBeenCalled();
   });
 
   it('creates an attendee for an event', async () => {
-    (prismaMock.event.findUnique as jest.Mock).mockResolvedValue({
+    findEventMock.mockResolvedValue({
       id: 'event-1',
     });
-    (prismaMock.attendee.create as jest.Mock).mockResolvedValue({
+    embedTextMock.mockResolvedValue([0.1, 0.2]);
+    createAttendeeMock.mockResolvedValue({
       id: 'attendee-1',
     });
-    (prismaMock.eventAttendee.upsert as jest.Mock).mockResolvedValue({
-      id: 'link-1',
+    findUniqueOrThrowAttendeeMock.mockResolvedValue({
+      id: 'attendee-1',
     });
 
     const result = await service.createAttendee('event-1', {
@@ -66,18 +101,91 @@ describe('EventsService', () => {
       skills: ['nestjs', 'prisma'],
       openToChat: true,
     });
+    const expectedProfileText = [
+      'name: Taylor',
+      'headline: undefined',
+      'bio: undefined',
+      'Skills: nestjs, prisma',
+      'Open to chat: yes',
+    ].join('\n');
 
-    expect(result).toEqual({ id: 'link-1' });
-    expect(prismaMock.eventAttendee.upsert).toHaveBeenCalled();
+    expect(result).toEqual({ id: 'attendee-1' });
+    expect(embedTextMock).toHaveBeenCalledWith(expectedProfileText);
+    expect(createAttendeeMock).toHaveBeenCalledWith({
+      data: {
+        eventId: 'event-1',
+        name: 'Taylor',
+        headline: undefined,
+        bio: undefined,
+        company: undefined,
+        role: undefined,
+        skills: ['nestjs', 'prisma'],
+        lookingFor: undefined,
+        openToChat: true,
+        profileText: expectedProfileText,
+      },
+    });
+    expect(executeRawUnsafeMock).toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE attendees'),
+      '[0.1,0.2]',
+      'text-embedding-3-small',
+      expect.any(Date),
+      'attendee-1',
+    );
+    expect(findUniqueOrThrowAttendeeMock).toHaveBeenCalledWith({
+      where: { id: 'attendee-1' },
+    });
+  });
+
+  it('updates an event', async () => {
+    findEventMock.mockResolvedValue({
+      id: 'event-1',
+      startAt: new Date('2026-05-01T10:00:00.000Z'),
+      endAt: new Date('2026-05-01T11:00:00.000Z'),
+    });
+    updateEventMock.mockResolvedValue({
+      id: 'event-1',
+      title: 'Updated Event',
+    });
+
+    const result = await service.updateEvent('event-1', {
+      title: 'Updated Event',
+      endAt: '2026-05-01T12:00:00.000Z',
+    });
+
+    expect(result).toEqual({ id: 'event-1', title: 'Updated Event' });
+    expect(updateEventMock).toHaveBeenCalledWith({
+      where: { id: 'event-1' },
+      data: {
+        title: 'Updated Event',
+        endAt: new Date('2026-05-01T12:00:00.000Z'),
+      },
+    });
+  });
+
+  it('removes an event', async () => {
+    findEventMock.mockResolvedValue({
+      id: 'event-1',
+    });
+    deleteEventMock.mockResolvedValue({
+      id: 'event-1',
+    });
+
+    const result = await service.removeEvent('event-1');
+
+    expect(result).toEqual({ id: 'event-1' });
+    expect(deleteEventMock).toHaveBeenCalledWith({
+      where: { id: 'event-1' },
+    });
   });
 
   it('lists attendees with pagination and filters', async () => {
-    (prismaMock.event.findUnique as jest.Mock).mockResolvedValue({
+    findEventMock.mockResolvedValue({
       id: 'event-1',
     });
-    (prismaMock.$transaction as jest.Mock).mockResolvedValue([
-      1,
-      [{ id: 'link-1', openToChat: true }],
+    countAttendeesMock.mockResolvedValue(1);
+    findManyAttendeesMock.mockResolvedValue([
+      { id: 'link-1', openToChat: true },
     ]);
 
     const result = await service.listAttendees('event-1', {
@@ -90,6 +198,6 @@ describe('EventsService', () => {
 
     expect(result.total).toBe(1);
     expect(result.items).toHaveLength(1);
-    expect(prismaMock.$transaction).toHaveBeenCalled();
+    expect(transactionMock).toHaveBeenCalled();
   });
 });

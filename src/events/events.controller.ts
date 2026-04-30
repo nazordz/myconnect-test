@@ -1,16 +1,19 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
 } from '@nestjs/common';
-import { CreateEventAttendeeDto } from './dto/create-event-attendee.dto';
 import { CreateEventDto } from './dto/create-event.dto';
-import { ListEventAttendeesDto } from './dto/list-event-attendees.dto';
+import { UpdateEventDto } from './dto/update-event.dto';
 import { EventsService } from './events.service';
+import { ListAttendeesDto } from './dto/list-attendees.dto';
+import { CreateAttendeeDto } from './dto/create-attendee.dto';
 
 @Controller('events')
 export class EventsController {
@@ -21,10 +24,23 @@ export class EventsController {
     return this.eventsService.createEvent(dto);
   }
 
+  @Patch(':eventId')
+  updateEvent(
+    @Param('eventId', new ParseUUIDPipe()) eventId: string,
+    @Body() dto: UpdateEventDto,
+  ) {
+    return this.eventsService.updateEvent(eventId, dto);
+  }
+
+  @Delete(':eventId')
+  removeEvent(@Param('eventId', new ParseUUIDPipe()) eventId: string) {
+    return this.eventsService.removeEvent(eventId);
+  }
+
   @Post(':eventId/attendees')
   createAttendee(
     @Param('eventId', new ParseUUIDPipe()) eventId: string,
-    @Body() dto: CreateEventAttendeeDto,
+    @Body() dto: CreateAttendeeDto,
   ) {
     return this.eventsService.createAttendee(eventId, dto);
   }
@@ -32,7 +48,7 @@ export class EventsController {
   @Get(':eventId/attendees')
   listAttendees(
     @Param('eventId', new ParseUUIDPipe()) eventId: string,
-    @Query() query: ListEventAttendeesDto,
+    @Query() query: ListAttendeesDto,
   ) {
     return this.eventsService.listAttendees(eventId, query);
   }

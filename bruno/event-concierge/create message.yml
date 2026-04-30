@@ -1,0 +1,31 @@
+info:
+  name: create message
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{baseUrl}}/events/:id/concierge/messages"
+  headers:
+    - name: Content-Type
+      value: application/json
+  params:
+    - name: id
+      value: aaa2ecff-f0fc-4eb8-bec6-1b9665159f3d
+      type: path
+  body:
+    type: json
+    data: |-
+      {
+        "attendeeId": "0ab61792-cc93-40df-bf22-e6e1b0d01773",
+      //   "message": "Carikan aku fullstack engineer untuk mengembangkan startup miliku"
+      //   "message": "carikan seorang yang memiliki pengalaman dengan linux dan mengerti networking seperti cisco dan mikrotik"
+        "message": "Kalau seorang Senior software engineer yang bisa mobile app dengan React Native dan punya pengalaman memimpin tim"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

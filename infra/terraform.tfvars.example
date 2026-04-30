@@ -1,0 +1,11 @@
+aws_region  = "ap-southeast-1"
+environment = "dev"
+
+# Required. Prefer TF_VAR_openai_api_key in your shell instead of committing it here.
+openai_api_key = "sk-..."
+
+# Optional overrides.
+project_name      = "myconnect-test"
+image_tag         = "latest"
+desired_count     = 1
+db_instance_class = "db.t4g.micro"

@@ -1,12 +1,18 @@
 import { Module } from '@nestjs/common';
-import { ConciergeModule } from './concierge/concierge.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { EventsModule } from './events/events.module';
-import { PrismaModule } from './prisma/prisma.module';
+import { ConfigModule } from '@nestjs/config';
+import { EventConciergeModule } from './event-concierge/event-concierge.module';
 
 @Module({
-  imports: [PrismaModule, EventsModule, ConciergeModule],
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
+    EventsModule,
+    EventConciergeModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })
