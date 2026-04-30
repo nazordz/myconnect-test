@@ -46,12 +46,16 @@ describe('EventsService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    transactionMock.mockImplementation((input) => {
-      if (typeof input === 'function') {
-        return input(txMock);
-      }
-      return Promise.all(input);
-    });
+    transactionMock.mockImplementation(
+      (
+        input: ((tx: typeof txMock) => Promise<unknown>) | Promise<unknown>[],
+      ) => {
+        if (typeof input === 'function') {
+          return input(txMock);
+        }
+        return Promise.all(input);
+      },
+    );
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -192,7 +196,7 @@ describe('EventsService', () => {
       page: 1,
       pageSize: 10,
       openToChat: true,
-      skill: 'nestjs',
+      skills: 'nestjs',
       search: 'tay',
     });
 
