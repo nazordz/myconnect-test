@@ -17,7 +17,7 @@ export interface SearchAttendeeRow {
   skills: string[] | null;
   looking_for: string | null;
   bio: string | null;
-  semantic_score: number;
+  semanticScore: number;
   skill_overlap_score: number;
   final_score: number;
 }

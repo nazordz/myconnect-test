@@ -237,7 +237,7 @@ export class EventConciergeService {
         a.looking_for,
         a.bio,
 
-        GREATEST(0, 1 - (a.embedding <=> $1::vector(1536))) AS semantic_score,
+        GREATEST(0, 1 - (a.embedding <=> $1::vector(1536))) AS semanticScore,
 
         CASE
           WHEN cardinality($4::text[]) = 0 THEN 0

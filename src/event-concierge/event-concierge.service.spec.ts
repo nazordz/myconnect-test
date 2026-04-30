@@ -312,7 +312,7 @@ describe('EventConciergeService', () => {
         looking_for: 'Builders',
         bio: 'Building AI products.',
         search_score: 0.9,
-        semantic_score: 0.8,
+        semanticScore: 0.8,
         skill_overlap_score: 1,
         keyword_score: 1,
       },

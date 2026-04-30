@@ -5,9 +5,15 @@ import { App } from 'supertest/types';
 import { EventConciergeModule } from '../src/event-concierge/event-concierge.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { OpenAiService } from '../src/openai/openai.service';
-import { EventConciergeService } from '../src/event-concierge/event-concierge.service';
+import type { FunctionCallOutput } from '../src/event-concierge/dto/input-tools';
 
 type ConciergeRole = 'USER' | 'ASSISTANT';
+
+type StoredConciergeSession = {
+  id: string;
+  eventId: string;
+  attendeeId: string;
+};
 
 type StoredConciergeMessage = {
   sessionId: string;
@@ -16,8 +22,62 @@ type StoredConciergeMessage = {
   createdAt: Date;
 };
 
+type ConciergeSessionUpsertArgs = {
+  where: {
+    eventId_attendeeId: {
+      eventId: string;
+      attendeeId: string;
+    };
+  };
+  create: {
+    eventId: string;
+    attendeeId: string;
+  };
+};
+
+type ConciergeMessageCreateArgs = {
+  data: {
+    sessionId: string;
+    role: ConciergeRole;
+    message: string;
+  };
+};
+
+type ConciergeMessageFindManyArgs = {
+  where: {
+    sessionId: string;
+  };
+};
+
+type ConciergeFunctionCall = {
+  type: 'function_call';
+  name: 'search_attendees';
+  call_id: string;
+  arguments: string;
+};
+
+type ConciergeParseRequest = {
+  input: Array<FunctionCallOutput | Record<string, unknown>>;
+  previous_response_id?: string;
+};
+
+type ConciergeParseResponse = {
+  id: string;
+  created_at: number;
+  completed_at: number;
+  output_parsed: { text: string } | null;
+  output: ConciergeFunctionCall[];
+  usage: Record<string, never>;
+};
+
 const createOpenAiMock = () => {
-  const parse = jest.fn();
+  const parse = jest.fn<
+    Promise<ConciergeParseResponse>,
+    [ConciergeParseRequest]
+  >();
+  const embedText = jest.fn<Promise<number[]>, [string]>(() =>
+    Promise.resolve([0.1, 0.2]),
+  );
 
   return {
     client: {
@@ -25,13 +85,30 @@ const createOpenAiMock = () => {
         parse,
       },
     },
+    embedText,
     parse,
   };
 };
 
 const createPrismaMock = () => {
-  const sessions = new Map<string, { id: string; eventId: string; attendeeId: string }>();
+  const sessions = new Map<string, StoredConciergeSession>();
   const messages: StoredConciergeMessage[] = [];
+  const searchRows = [
+    {
+      id: 'candidate-1',
+      name: 'Taylor Rivera',
+      headline: 'Product Lead',
+      company: 'Acme Labs',
+      role: 'Product',
+      skills: ['sales', 'partnerships'],
+      looking_for: 'Engineering founders',
+      bio: 'Helps developer tools companies find distribution channels.',
+      semanticScore: 0.89,
+      skillOverlapScore: 1,
+      lookingForMatchScore: 1,
+      finalScore: 0.92,
+    },
+  ];
 
   const attendee = {
     id: 'a32d9253-8b87-45f5-9d26-eb4dc02f374f',
@@ -54,14 +131,14 @@ const createPrismaMock = () => {
 
   const mock = {
     attendee: {
-      findFirst: jest.fn(async () => attendee),
+      findFirst: jest.fn(() => Promise.resolve(attendee)),
     },
     conciergeSession: {
-      upsert: jest.fn(async ({ where, create }: any) => {
+      upsert: jest.fn(({ where, create }: ConciergeSessionUpsertArgs) => {
         const key = `${where.eventId_attendeeId.eventId}:${where.eventId_attendeeId.attendeeId}`;
         const existing = sessions.get(key);
         if (existing) {
-          return existing;
+          return Promise.resolve(existing);
         }
 
         const created = {
@@ -70,11 +147,11 @@ const createPrismaMock = () => {
           attendeeId: create.attendeeId,
         };
         sessions.set(key, created);
-        return created;
+        return Promise.resolve(created);
       }),
     },
     conciergeMessage: {
-      create: jest.fn(async ({ data }: any) => {
+      create: jest.fn(({ data }: ConciergeMessageCreateArgs) => {
         const saved = {
           sessionId: data.sessionId,
           role: data.role,
@@ -82,27 +159,50 @@ const createPrismaMock = () => {
           createdAt: new Date(),
         };
         messages.push(saved);
-        return saved;
+        return Promise.resolve(saved);
       }),
-      findMany: jest.fn(async ({ where }: any) =>
-        messages
-          .filter((m) => m.sessionId === where.sessionId)
-          .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()),
+      findMany: jest.fn(({ where }: ConciergeMessageFindManyArgs) =>
+        Promise.resolve(
+          messages
+            .filter((m) => m.sessionId === where.sessionId)
+            .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()),
+        ),
       ),
     },
+    $queryRawUnsafe: jest.fn(() => Promise.resolve(searchRows)),
     __state: {
       sessions,
       messages,
+      searchRows,
     },
   };
 
   return mock;
 };
 
+const getParseRequest = (
+  parseMock: ReturnType<typeof createOpenAiMock>['parse'],
+  callIndex: number,
+) => {
+  const call = parseMock.mock.calls[callIndex];
+  if (!call) {
+    throw new Error(`Expected parse call ${callIndex} to exist`);
+  }
+  return call[0];
+};
+
+const getFunctionCallOutputs = (
+  requestInput: ConciergeParseRequest['input'],
+): FunctionCallOutput[] =>
+  requestInput.filter(
+    (item): item is FunctionCallOutput =>
+      'type' in item && item.type === 'function_call_output',
+  );
+
 describe('EventConciergeController (e2e)', () => {
   let app: INestApplication<App>;
   let prismaMock: ReturnType<typeof createPrismaMock>;
-  let parseMock: jest.Mock;
+  let parseMock: ReturnType<typeof createOpenAiMock>['parse'];
 
   beforeEach(async () => {
     prismaMock = createPrismaMock();
@@ -110,15 +210,6 @@ describe('EventConciergeController (e2e)', () => {
     parseMock = openAiMock.parse;
 
     const firstResponseId = 'resp_first_123';
-    const searchToolPayload = {
-      attendees: [
-        {
-          id: 'candidate-1',
-          name: 'Taylor Rivera',
-          headline: 'Product Lead',
-        },
-      ],
-    };
 
     // First LLM turn requests a backend tool call.
     parseMock.mockResolvedValueOnce({
@@ -133,6 +224,8 @@ describe('EventConciergeController (e2e)', () => {
           name: 'search_attendees',
           call_id: 'call_search_1',
           arguments: JSON.stringify({
+            eventId: '98379c63-f0ef-4b3e-b4d1-af16f71f6848',
+            attendeeId: 'a32d9253-8b87-45f5-9d26-eb4dc02f374f',
             lookingFor: 'people with GTM experience',
             skills: ['sales', 'partnerships'],
             limit: 5,
@@ -161,15 +254,9 @@ describe('EventConciergeController (e2e)', () => {
       .overrideProvider(OpenAiService)
       .useValue({
         getClient: () => openAiMock.client,
-        embedText: jest.fn(),
+        embedText: openAiMock.embedText,
       })
       .compile();
-
-    const conciergeService = moduleFixture.get(EventConciergeService);
-    // Mock the backend tool result that will be serialized and sent back to OpenAI.
-    jest
-      .spyOn(conciergeService as any, 'toolSearchAttendees')
-      .mockResolvedValue(searchToolPayload);
 
     app = moduleFixture.createNestApplication();
     await app.init();
@@ -188,10 +275,11 @@ describe('EventConciergeController (e2e)', () => {
     };
 
     // 1) Execute the full HTTP flow through the controller and service.
-    const response = await request(app.getHttpServer())
+    const httpServer = app.getHttpServer();
+    const response = await request(httpServer)
       .post(`/events/${eventId}/concierge/messages`)
       .send(body)
-      .expect(200);
+      .expect(201);
 
     // 2) Verify the parsed assistant response is returned to API consumers.
     expect(response.body).toEqual({
@@ -214,23 +302,15 @@ describe('EventConciergeController (e2e)', () => {
     expect(parseMock).toHaveBeenCalledTimes(2);
 
     // 6) Second call must include previous_response_id to continue tool-call thread.
-    const secondCallArgs = parseMock.mock.calls[1][0];
+    const secondCallArgs = getParseRequest(parseMock, 1);
     expect(secondCallArgs.previous_response_id).toBe('resp_first_123');
 
     // 7) Verify tool output sent back to OpenAI includes serialized search_attendees result.
-    expect(secondCallArgs.input).toEqual([
+    expect(getFunctionCallOutputs(secondCallArgs.input)).toEqual([
       {
         type: 'function_call_output',
         call_id: 'call_search_1',
-        output: JSON.stringify({
-          attendees: [
-            {
-              id: 'candidate-1',
-              name: 'Taylor Rivera',
-              headline: 'Product Lead',
-            },
-          ],
-        }),
+        output: JSON.stringify(prismaMock.__state.searchRows),
       },
     ]);
   });
