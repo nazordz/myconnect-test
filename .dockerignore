@@ -1,0 +1,5 @@
+.codex
+.github
+.vscode
+dist
+node_modules

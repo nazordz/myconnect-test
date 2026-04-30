@@ -1,0 +1,31 @@
+info:
+  name: update event
+  type: http
+  seq: 4
+
+http:
+  method: PATCH
+  url: "{{baseUrl}}/events/:eventId"
+  params:
+    - name: eventId
+      value: 2e9d8bb4-5f9a-4f43-a208-06d0ecab9242
+      type: path
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "title": "Jobfair 2026",
+        "location": "Jakarta Convention Center",
+        "startAt": "2026-06-25T09:00:00.000Z",
+        "endAt": "2026-06-26T17:00:00.000Z"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

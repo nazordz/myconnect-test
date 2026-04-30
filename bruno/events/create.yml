@@ -1,0 +1,27 @@
+info:
+  name: create event
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{baseUrl}}/events"
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "title": "Network Mikrotik Seminar",
+        "location": "Jakarta",
+        "startAt": "2026-06-25T09:00:00.000Z",
+        "endAt": "2026-06-26T17:00:00.000Z"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

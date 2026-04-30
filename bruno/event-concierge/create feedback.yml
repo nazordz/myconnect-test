@@ -1,0 +1,29 @@
+info:
+  name: create feedback
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: "{{baseUrl}}/messages/:messageId/feedback"
+  headers:
+    - name: Content-Type
+      value: application/json
+  params:
+    - name: messageId
+      value: 7f2190f8-4afc-43ff-b59d-f1e909ab9df0
+      type: path
+  body:
+    type: json
+    data: |-
+      {
+        "rating": 5,
+        "notes": "Helpful recommendations."
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

@@ -1,0 +1,75 @@
+info:
+  name: add attendee
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: "{{baseUrl}}/events/:eventId/attendees"
+  headers:
+    - name: Content-Type
+      value: application/json
+  params:
+    - name: eventId
+      value: aaa2ecff-f0fc-4eb8-bec6-1b9665159f3d
+      type: path
+  body:
+    type: json
+    data: |-
+      // {
+      //   "name": "Nazor",
+      //   "headline": "Senior Fullstack Engineer",
+      //   "bio": "Building fullstack app.",
+      //   "company": "Deptech",
+      //   "role": "Engineer",
+      //   "skills": ["laravel", "ai", "javascript", "kubernetes"],
+      //   "lookingFor": "Mencari partner diskusi AI & LLM",
+      //   "openToChat": true
+      // }
+      {
+        "name": "Nissa",
+        "headline": "Middle Fullstack engineer",
+        "bio": "fullstack app + Mobile App.",
+        "company": "Majut indonesia",
+        "role": "Engineer",
+        "skills": ["laravel", "reactjs", "javascript", "react native"],
+        "lookingFor": "Mencari partner diskusi Fullstack & AI",
+        "openToChat": true
+      }
+      // {
+      //   "name": "Salim",
+      //   "headline": "Experienced to develop HRIS & ERP products",
+      //   "bio": "Product & Engineering.",
+      //   "company": "Odoo",
+      //   "role": "Head of product",
+      //   "skills": ["prd", "bsd", "scrum", "jira"],
+      //   "lookingFor": "Mencari partner bisnis dibidang ERP dengan meanfaatkan AI & LLM",
+      //   "openToChat": true
+      // }
+      // {
+      //   "name": "Naufal",
+      //   "headline": "Experienced to setup enterprise infrastructure",
+      //   "bio": "Network & Engineering.",
+      //   "company": "Cisco",
+      //   "role": "Head of Engineering",
+      //   "skills": ["cisco", "mikrotik", "infra", "jira"],
+      //   "lookingFor": "Mencari kandidat terbaik untuk bergabung ke perusahaan",
+      //   "openToChat": true
+      // }
+      // {
+      //   "name": "Fikri",
+      //   "headline": "Senior Datacenter operator onsite",
+      //   "bio": "Networking, infra & datacenter.",
+      //   "company": "Datacentre.id",
+      //   "role": "Sysadmin",
+      //   "skills": ["cisco", "mikrotik", "infra", "linux", ""],
+      //   "lookingFor": "Mencari pengalaman dan kawan diskusi serta peluang kerja yang baru",
+      //   "openToChat": true
+      // }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

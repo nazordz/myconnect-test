@@ -1,0 +1,31 @@
+info:
+  name: list attendees
+  type: http
+  seq: 3
+
+http:
+  method: GET
+  url: "{{baseUrl}}/events/:eventId/attendees?page=1&pageSize=10&skills=&search="
+  params:
+    - name: page
+      value: "1"
+      type: query
+    - name: pageSize
+      value: "10"
+      type: query
+    - name: skills
+      value: ""
+      type: query
+    - name: search
+      value: ""
+      type: query
+    - name: eventId
+      value: aaa2ecff-f0fc-4eb8-bec6-1b9665159f3d
+      type: path
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

@@ -1,11 +1,23 @@
 services:
+  myconnect:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/postgres?schema=public
+    depends_on:
+      - postgres
   postgres:
     image: pgvector/pgvector:pg18-trixie
     ports:
       - "5432:5432"
     shm_size: 1g
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
