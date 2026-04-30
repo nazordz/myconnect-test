@@ -2,10 +2,73 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { OpenAiService } from '@/openai/openai.service';
 import { PrismaService } from '@/prisma/prisma.service';
 import { EventConciergeService } from './event-concierge.service';
+import type {
+  FunctionTool,
+  Tool,
+} from 'openai/resources/responses/responses.js';
+import type { FunctionCallOutput } from './dto/input-tools';
+
+type ConciergeParseRequest = {
+  input: Array<FunctionCallOutput | { role: string; content: string }>;
+  previous_response_id?: string;
+  tools?: Tool[];
+};
+
+type ConciergeFunctionCall = {
+  type: 'function_call';
+  name: 'search_attendees' | 'score_match' | 'draft_intro_message';
+  call_id: string;
+  arguments: string;
+};
+
+type ConciergeParsedMessage = {
+  text: string;
+  intent: {
+    goal: string;
+    requesterProfile: {
+      role: string;
+      location: string | null;
+    };
+    targetAttendeeTypes: string[];
+    domains: string[];
+    keywords: string[];
+    skills: string[];
+    relationshipType: string;
+  };
+};
+
+type ConciergeParseResponse = {
+  id: string;
+  output_parsed: ConciergeParsedMessage | null;
+  output: ConciergeFunctionCall[];
+  output_text: string;
+  created_at?: number;
+  completed_at?: number;
+  usage?: unknown;
+};
+
+type JsonSchemaProperty = {
+  type?: string;
+  required?: string[];
+  additionalProperties?: boolean;
+  properties?: Record<string, JsonSchemaProperty>;
+  items: JsonSchemaProperty;
+};
+
+type FunctionToolWithSchema = FunctionTool & {
+  parameters: JsonSchemaProperty & {
+    required: string[];
+    additionalProperties: boolean;
+    properties: Record<string, JsonSchemaProperty>;
+  };
+};
 
 describe('EventConciergeService', () => {
   let service: EventConciergeService;
-  const parseMock = jest.fn();
+  const parseMock = jest.fn<
+    Promise<ConciergeParseResponse>,
+    [ConciergeParseRequest]
+  >();
   const getClientMock = jest.fn();
   const embedTextMock = jest.fn();
   const findAttendeeMock = jest.fn();
@@ -59,6 +122,38 @@ describe('EventConciergeService', () => {
       skills: ['nestjs'],
       relationshipType: 'networking',
     },
+  } satisfies ConciergeParsedMessage;
+
+  const getParseRequest = (callIndex: number) => {
+    const call = parseMock.mock.calls[callIndex];
+    if (!call) {
+      throw new Error(`Expected parse call ${callIndex} to exist`);
+    }
+    return call[0];
+  };
+
+  const getFunctionTool = (
+    request: ConciergeParseRequest,
+    name: FunctionTool['name'],
+  ): FunctionToolWithSchema => {
+    const tool = request.tools?.find(
+      (item): item is FunctionTool =>
+        item.type === 'function' && item.name === name,
+    );
+    if (!tool?.parameters) {
+      throw new Error(`Expected ${name} tool with parameters`);
+    }
+    return tool as FunctionToolWithSchema;
+  };
+
+  const getFirstFunctionCallOutput = (
+    request: ConciergeParseRequest,
+  ): FunctionCallOutput => {
+    const input = request.input[0];
+    if (!input || !('type' in input) || input.type !== 'function_call_output') {
+      throw new Error('Expected first input item to be function_call_output');
+    }
+    return input;
   };
 
   beforeEach(async () => {
@@ -114,15 +209,13 @@ describe('EventConciergeService', () => {
       message: 'Find AI founders',
     });
 
-    const firstRequest = parseMock.mock.calls[0][0];
-    const tools = firstRequest.tools;
-    const searchAttendeesTool = tools.find(
-      (tool) => tool.name === 'search_attendees',
+    const firstRequest = getParseRequest(0);
+    const searchAttendeesTool = getFunctionTool(
+      firstRequest,
+      'search_attendees',
     );
-    const scoreMatchTool = tools.find((tool) => tool.name === 'score_match');
-    const draftIntroTool = tools.find(
-      (tool) => tool.name === 'draft_intro_message',
-    );
+    const scoreMatchTool = getFunctionTool(firstRequest, 'score_match');
+    const draftIntroTool = getFunctionTool(firstRequest, 'draft_intro_message');
 
     expect(new Set(searchAttendeesTool.parameters.required)).toEqual(
       new Set(Object.keys(searchAttendeesTool.parameters.properties)),
@@ -240,13 +333,15 @@ describe('EventConciergeService', () => {
       'AI founders',
       3,
     );
-    const secondRequest = parseMock.mock.calls[1][0];
+    const secondRequest = getParseRequest(1);
+    const functionCallOutput = getFirstFunctionCallOutput(secondRequest);
+
     expect(secondRequest.previous_response_id).toBe('resp-1');
-    expect(secondRequest.input[0]).toMatchObject({
+    expect(functionCallOutput).toMatchObject({
       type: 'function_call_output',
       call_id: 'call-1',
     });
-    expect(JSON.parse(secondRequest.input[0].output)).toEqual([
+    expect(JSON.parse(functionCallOutput.output) as unknown).toEqual([
       expect.objectContaining({
         attendee_id: 'candidate-1',
         name: 'Jordan',
