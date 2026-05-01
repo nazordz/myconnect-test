@@ -26,16 +26,16 @@ http:
       //   "lookingFor": "Mencari partner diskusi AI & LLM",
       //   "openToChat": true
       // }
-      {
-        "name": "Nissa",
-        "headline": "Middle Fullstack engineer",
-        "bio": "fullstack app + Mobile App.",
-        "company": "Majut indonesia",
-        "role": "Engineer",
-        "skills": ["laravel", "reactjs", "javascript", "react native"],
-        "lookingFor": "Mencari partner diskusi Fullstack & AI",
-        "openToChat": true
-      }
+      // {
+      //   "name": "Nissa",
+      //   "headline": "Middle Fullstack engineer",
+      //   "bio": "fullstack app + Mobile App.",
+      //   "company": "Majut indonesia",
+      //   "role": "Engineer",
+      //   "skills": ["laravel", "reactjs", "javascript", "react native"],
+      //   "lookingFor": "Mencari partner diskusi Fullstack & AI",
+      //   "openToChat": true
+      // }
       // {
       //   "name": "Salim",
       //   "headline": "Experienced to develop HRIS & ERP products",
@@ -66,6 +66,16 @@ http:
       //   "lookingFor": "Mencari pengalaman dan kawan diskusi serta peluang kerja yang baru",
       //   "openToChat": true
       // }
+      {
+        "name": "Sarah Lim",
+        "headline": "Founder of Ledger AI (B2B finance automation)",
+        "bio": "Founder & CEO.",
+        "company": "LedgerAI",
+        "role": "CEO",
+        "skills": ["ceo", "accounting", "management", "founder", "ai", "automation"],
+        "lookingFor": "looking for software engineer to join my team including: backend, frontend and QA",
+        "openToChat": true
+      }
   auth: inherit
 
 settings:

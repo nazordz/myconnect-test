@@ -1,12 +1,15 @@
 import { Event } from '@/generated/prisma/client';
 
 export interface SearchAttendeesParams {
-  eventId: string;
-  attendeeId: string;
   lookingFor: string;
   skills: string[];
   limit: number | null;
 }
+
+export type ToolScope = {
+  eventId: string;
+  attendeeId: string;
+};
 
 export interface SearchAttendeeRow {
   id: string;
@@ -17,7 +20,7 @@ export interface SearchAttendeeRow {
   skills: string[] | null;
   looking_for: string | null;
   bio: string | null;
-  semantic_score: number;
+  semanticScore: number;
   skill_overlap_score: number;
   final_score: number;
 }
@@ -54,71 +57,19 @@ export interface ScoreMatchParams {
 }
 
 export type DraftIntroMessageParams = {
-  event: Event;
-  requester: AttendeeProfile;
   candidate_ids: string[];
 };
 
-// export type SearchAttendeesOutput = {
-//   candidates: Array<{
-//     attendeeId: string;
-//     name: string;
-//     headline: string | null;
-//     company: string | null;
-//     role: string | null;
-//     skills: string[];
-//     lookingFor: string | null;
-//     bio: string | null;
-//     searchScore: number;
-//     semanticScore: number;
-//     skillOverlapScore: number;
-//     keywordScore: number;
-//   }>;
-// };
+export type DraftIntroMessageInput = {
+  event: Event;
+  requester: AttendeeProfile;
+  candidates: AttendeeProfile[];
+};
 
-// type IntroMessageAttendeeInput = {
-//   attendeeId: string;
-//   name: string;
-//   headline?: string;
-//   company?: string;
-//   role?: string;
-//   skills?: string[];
-//   lookingFor?: string;
-// };
-
-// type MatchAttendeeInput = IntroMessageAttendeeInput & {
-//   bio?: string;
-// };
-// export type DraftIntroMessageInput = {
-//   requester: IntroMessageAttendeeInput;
-//   candidate: IntroMessageAttendeeInput;
-//   rationale: string;
-//   sharedGround: string[];
-//   userMessage: string;
-// };
-
-// export type DraftIntroMessageOutput = {
-//   message: string;
-// };
-
-// export type ScoreMatchInput = {
-//   eventId: string;
-//   requester: MatchAttendeeInput;
-//   candidates: Array<
-//     MatchAttendeeInput & {
-//       searchScore?: number;
-//       semanticScore?: number;
-//       skillOverlapScore?: number;
-//       keywordScore?: number;
-//     }
-//   >;
-//   userMessage: string;
-// };
-// export type ScoreMatchOutput = {
-//   matches: Array<{
-//     attendeeId: string;
-//     score: number;
-//     rationale: string;
-//     sharedGround: string[];
-//   }>;
-// };
+export type LogToolCall = {
+  concierge_message_id: string;
+  request_id: string;
+  tool_name: string;
+  latency: number;
+  tokens: number;
+};
