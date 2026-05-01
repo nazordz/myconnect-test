@@ -36,16 +36,6 @@ const ScoreRequesterToolSchema = z.object({
   lookingFor: z.string(),
 });
 
-const DraftRequesterToolSchema = z.object({
-  attendeeId: z.string(),
-  name: z.string(),
-  headline: z.string(),
-  company: z.string(),
-  role: z.string(),
-  skills: z.array(z.string()),
-  lookingFor: z.string(),
-});
-
 const ScoreCandidateToolSchema = z.object({
   attendeeId: z.string(),
   name: z.string(),
@@ -67,8 +57,6 @@ export const SearchAttendeesToolParamsSchema = z.object({
     .describe(
       'Skills or domains relevant to the kind of attendee the requester wants to find.',
     ),
-  eventId: z.string().describe('Event ID'),
-  attendeeId: z.string().describe('Requester attendee ID'),
   limit: z
     .number()
     .meta({ default: 5 })
@@ -87,11 +75,9 @@ export const ScoreMatchToolParamsSchema = z.object({
 });
 
 export const DraftIntroMessageToolParamsSchema = z.object({
-  event: EventToolSchema.describe('details about the event'),
-  requester: DraftRequesterToolSchema,
   candidate_ids: z
     .array(z.string())
-    .describe('List of candidate attendee IDs.'),
+    .describe('List of candidate attendee IDs from previous tool results.'),
 });
 
 export const ScoreMatchResultSchema = z.object({
@@ -106,5 +92,6 @@ export const ScoreMatchResultSchema = z.object({
 });
 
 export const DraftIntroMessageResultSchema = z.object({
-  message: z.string(),
+  // message: z.string(),
+  messages: z.array(z.object({ attendeeId: z.string(), content: z.string() })),
 });

@@ -39,7 +39,7 @@ type ConciergeParsedMessage = {
 
 type ConciergeParseResponse = {
   id: string;
-  output_parsed: ConciergeParsedMessage | null;
+  output_parsed: unknown | null;
   output: ConciergeFunctionCall[];
   output_text: string;
   created_at?: number;
@@ -72,6 +72,7 @@ describe('EventConciergeService', () => {
   const getClientMock = jest.fn();
   const embedTextMock = jest.fn();
   const findAttendeeMock = jest.fn();
+  const findManyAttendeesMock = jest.fn();
   const upsertSessionMock = jest.fn();
   const createMessageMock = jest.fn();
   const findManyMessagesMock = jest.fn();
@@ -81,6 +82,7 @@ describe('EventConciergeService', () => {
   const prismaMock = {
     attendee: {
       findFirst: findAttendeeMock,
+      findMany: findManyAttendeesMock,
     },
     conciergeSession: {
       upsert: upsertSessionMock,
@@ -106,6 +108,13 @@ describe('EventConciergeService', () => {
     lookingFor: 'AI founders',
     openToChat: true,
     profileText: 'Taylor builds LLM products.',
+    event: {
+      id: 'event-1',
+      title: 'AI Summit',
+      location: 'Jakarta',
+      startAt: new Date('2026-05-01T09:00:00.000Z'),
+      endAt: new Date('2026-05-01T17:00:00.000Z'),
+    },
   };
 
   const parsedMessage = {
@@ -164,6 +173,7 @@ describe('EventConciergeService', () => {
       },
     });
     findAttendeeMock.mockResolvedValue(attendee);
+    findManyAttendeesMock.mockResolvedValue([]);
     upsertSessionMock.mockResolvedValue({ id: 'session-1' });
     createMessageMock.mockResolvedValue({ id: 'message-1' });
     findManyMessagesMock.mockResolvedValue([
@@ -223,6 +233,10 @@ describe('EventConciergeService', () => {
     expect(searchAttendeesTool.parameters.additionalProperties).toBe(false);
     expect(searchAttendeesTool.parameters.properties.skills.type).toBe('array');
     expect(searchAttendeesTool.parameters.properties.limit.type).toBe('number');
+    expect(searchAttendeesTool.parameters.properties.eventId).toBeUndefined();
+    expect(
+      searchAttendeesTool.parameters.properties.attendeeId,
+    ).toBeUndefined();
     expect(scoreMatchTool.parameters.required).toEqual([
       'event',
       'requester',
@@ -253,27 +267,16 @@ describe('EventConciergeService', () => {
       'lookingFor',
       'finalScore',
     ]);
-    expect(draftIntroTool.parameters.required).toEqual([
-      'event',
-      'requester',
-      'candidate_ids',
-    ]);
+    expect(draftIntroTool.parameters.required).toEqual(['candidate_ids']);
     expect(draftIntroTool.parameters.additionalProperties).toBe(false);
-    expect(draftIntroTool.parameters.properties.requester.required).toEqual([
-      'attendeeId',
-      'name',
-      'headline',
-      'company',
-      'role',
-      'skills',
-      'lookingFor',
-    ]);
+    expect(draftIntroTool.parameters.properties.event).toBeUndefined();
+    expect(draftIntroTool.parameters.properties.requester).toBeUndefined();
     expect(draftIntroTool.parameters.properties.candidate_ids.type).toBe(
       'array',
     );
   });
 
-  it('awaits search_attendees and returns tool output', async () => {
+  it('awaits search_attendees with server scope and clamped limit', async () => {
     parseMock
       .mockResolvedValueOnce({
         id: 'resp-1',
@@ -286,9 +289,9 @@ describe('EventConciergeService', () => {
             arguments: JSON.stringify({
               lookingFor: 'AI founders',
               skills: ['llm'],
-              eventId: 'event-1',
-              attendeeId: 'attendee-1',
-              limit: 3,
+              eventId: 'malicious-event',
+              attendeeId: 'malicious-attendee',
+              limit: 999,
             }),
           },
         ],
@@ -303,7 +306,7 @@ describe('EventConciergeService', () => {
     embedTextMock.mockResolvedValue([0.1, 0.2]);
     queryRawUnsafeMock.mockResolvedValue([
       {
-        attendee_id: 'candidate-1',
+        id: 'candidate-1',
         name: 'Jordan',
         headline: 'AI Founder',
         company: 'Acme AI',
@@ -331,7 +334,7 @@ describe('EventConciergeService', () => {
       'attendee-1',
       ['llm'],
       'AI founders',
-      3,
+      10,
     );
     const secondRequest = getParseRequest(1);
     const functionCallOutput = getFirstFunctionCallOutput(secondRequest);
@@ -343,9 +346,113 @@ describe('EventConciergeService', () => {
     });
     expect(JSON.parse(functionCallOutput.output) as unknown).toEqual([
       expect.objectContaining({
-        attendee_id: 'candidate-1',
+        id: 'candidate-1',
         name: 'Jordan',
       }),
     ]);
+  });
+
+  it('fetches grounded candidate facts before drafting intro messages', async () => {
+    parseMock
+      .mockResolvedValueOnce({
+        id: 'resp-1',
+        output_parsed: null,
+        output: [
+          {
+            type: 'function_call',
+            name: 'draft_intro_message',
+            call_id: 'call-1',
+            arguments: JSON.stringify({
+              candidate_ids: ['candidate-1', 'candidate-2', 'attendee-1'],
+            }),
+          },
+        ],
+        output_text: '',
+      })
+      .mockResolvedValueOnce({
+        id: 'resp-draft',
+        output_parsed: {
+          messages: [
+            {
+              attendeeId: 'candidate-1',
+              content: 'Hi Jordan, I noticed your AI work.',
+            },
+          ],
+        },
+        output: [],
+        output_text: '',
+        usage: { total_tokens: 42 },
+      })
+      .mockResolvedValueOnce({
+        id: 'resp-2',
+        output_parsed: parsedMessage,
+        output: [],
+        output_text: parsedMessage.text,
+      });
+    findManyAttendeesMock.mockResolvedValue([
+      {
+        id: 'candidate-1',
+        name: 'Jordan',
+        headline: 'AI Founder',
+        bio: 'Building AI products.',
+        company: 'Acme AI',
+        role: 'Founder',
+        skills: ['llm'],
+        lookingFor: 'Backend co-founder',
+      },
+    ]);
+
+    const result = await service.sendMessage('event-1', {
+      attendeeId: 'attendee-1',
+      message: 'Draft intro for Jordan',
+    });
+
+    expect(result).toEqual(parsedMessage);
+    expect(findManyAttendeesMock).toHaveBeenCalledWith({
+      where: {
+        eventId: 'event-1',
+        id: {
+          in: ['candidate-1', 'candidate-2'],
+        },
+        openToChat: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        headline: true,
+        bio: true,
+        company: true,
+        role: true,
+        skills: true,
+        lookingFor: true,
+      },
+    });
+
+    const draftRequest = getParseRequest(1);
+    const draftInput = JSON.parse(
+      (draftRequest.input[1] as { content: string }).content,
+    ) as {
+      requester: { attendeeId: string };
+      candidates: Array<{ attendeeId: string; name: string }>;
+    };
+
+    expect(draftInput.requester.attendeeId).toBe('attendee-1');
+    expect(draftInput.candidates).toEqual([
+      expect.objectContaining({
+        attendeeId: 'candidate-1',
+        name: 'Jordan',
+      }),
+    ]);
+
+    const finalRequest = getParseRequest(2);
+    const functionCallOutput = getFirstFunctionCallOutput(finalRequest);
+    expect(JSON.parse(functionCallOutput.output) as unknown).toEqual({
+      messages: [
+        {
+          attendeeId: 'candidate-1',
+          content: 'Hi Jordan, I noticed your AI work.',
+        },
+      ],
+    });
   });
 });

@@ -17,10 +17,11 @@ http:
     type: json
     data: |-
       {
-        "attendeeId": "0ab61792-cc93-40df-bf22-e6e1b0d01773",
+        "attendeeId": "36c3217c-489f-47e4-9fec-4e0c057a98a1",
       //   "message": "Carikan aku fullstack engineer untuk mengembangkan startup miliku"
       //   "message": "carikan seorang yang memiliki pengalaman dengan linux dan mengerti networking seperti cisco dan mikrotik"
-        "message": "Kalau seorang Senior software engineer yang bisa mobile app dengan React Native dan punya pengalaman memimpin tim"
+      //   "message": "Kalau seorang Senior software engineer yang bisa mobile app dengan React Native dan punya pengalaman memimpin tim"
+        "message": " I'm a fullstack engineer in Jakarta, I'm at this event mainly to find AI startups that might need a technical co-founder. Ideally B2B SaaS"
       }
   auth: inherit
 

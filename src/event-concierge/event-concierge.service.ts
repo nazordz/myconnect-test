@@ -10,13 +10,16 @@ import type {
   ResponseInput,
 } from 'openai/resources/responses/responses.js';
 import {
+  AttendeeProfile,
+  DraftIntroMessageInput,
   DraftIntroMessageParams,
   FunctionCallOutput,
+  LogToolCall,
   ScoreMatchParams,
   SearchAttendeeRow,
   SearchAttendeesParams,
+  ToolScope,
 } from './dto/input-tools';
-import dayjs from 'dayjs';
 import {
   ConciergeMessageSchema,
   DraftIntroMessageResultSchema,
@@ -37,6 +40,21 @@ const conciergeMessageRoleToOpenAiRole = {
   ASSISTANT: 'assistant',
   DEVELOPER: 'developer',
 } satisfies Record<ConciergeMessageRole, OpenAiMessageRole>;
+
+const elapsedMs = (startedAt: number) => Date.now() - startedAt;
+const DEFAULT_SEARCH_LIMIT = 5;
+const MAX_SEARCH_LIMIT = 10;
+
+type AttendeeProfileSource = {
+  id: string;
+  name: string;
+  headline: string | null;
+  bio: string | null;
+  company: string | null;
+  role: string | null;
+  skills: string[] | null;
+  lookingFor: string | null;
+};
 
 @Injectable()
 export class EventConciergeService {
@@ -69,6 +87,11 @@ export class EventConciergeService {
         `Attendee ${dto.attendeeId} not found for event ${eventId}`,
       );
     }
+    const toolScope: ToolScope = {
+      eventId,
+      attendeeId: attendee.id,
+    };
+    const requesterProfile = this.toAttendeeProfile(attendee);
     const conciergeSession = await this.prisma.conciergeSession.upsert({
       where: {
         eventId_attendeeId: {
@@ -108,9 +131,10 @@ export class EventConciergeService {
         content: item.message,
       })),
     ];
-    Logger.log('inputMessages', inputMessages);
+    const toolCalls: LogToolCall[] = [];
 
     const openai = this.openAiService.getClient();
+    const startedAt = Date.now();
     let response = await openai.responses.parse({
       model: 'gpt-5.4-mini',
       input: inputMessages,
@@ -122,6 +146,13 @@ export class EventConciergeService {
       text: {
         format: zodTextFormat(ConciergeMessageSchema, 'conciergeMessage'),
       },
+    });
+    toolCalls.push({
+      request_id: response._request_id ?? '',
+      tool_name: 'user sent message',
+      concierge_message_id: '',
+      latency: elapsedMs(startedAt),
+      tokens: response.usage?.total_tokens ?? 0,
     });
 
     while (true) {
@@ -140,13 +171,23 @@ export class EventConciergeService {
             resFunc.arguments,
           ) as SearchAttendeesParams;
           Logger.log('searchAttendeesInput', searchAttendeesInput);
-          const outputSearchAttendees =
-            await this.toolSearchAttendees(searchAttendeesInput);
+          const startedAt = Date.now();
+          const outputSearchAttendees = await this.toolSearchAttendees(
+            searchAttendeesInput,
+            toolScope,
+          );
           Logger.log('outputSearchAttendees', outputSearchAttendees);
           functionCallOutputs.push({
             type: 'function_call_output',
             call_id: resFunc.call_id,
             output: JSON.stringify(outputSearchAttendees),
+          });
+          toolCalls.push({
+            request_id: '',
+            tool_name: 'search_attendees',
+            concierge_message_id: '',
+            latency: elapsedMs(startedAt),
+            tokens: 0,
           });
         }
         if (resFunc.name == 'score_match') {
@@ -154,12 +195,20 @@ export class EventConciergeService {
             resFunc.arguments,
           ) as ScoreMatchParams;
           Logger.log('scoreMatchInput', scoreMatchInput);
+          const startedAt = Date.now();
           const outputScoreMatch = await this.toolScoreMatch(scoreMatchInput);
-          Logger.log('outputScoreMatch', outputScoreMatch);
+          Logger.log('outputScoreMatch', outputScoreMatch.output_parsed ?? '');
           functionCallOutputs.push({
             type: 'function_call_output',
             call_id: resFunc.call_id,
-            output: JSON.stringify(outputScoreMatch),
+            output: JSON.stringify(outputScoreMatch.output_parsed),
+          });
+          toolCalls.push({
+            request_id: outputScoreMatch._request_id ?? '',
+            tool_name: 'scrore_match',
+            concierge_message_id: '',
+            latency: elapsedMs(startedAt),
+            tokens: outputScoreMatch.usage?.total_tokens ?? 0,
           });
         }
         if (resFunc.name == 'draft_intro_message') {
@@ -167,18 +216,32 @@ export class EventConciergeService {
             resFunc.arguments,
           ) as DraftIntroMessageParams;
           Logger.log('draftIntroMessageInput', draftIntroMessageInput);
+          const startedAt = Date.now();
           const outputDraftIntroMessage = await this.toolDraftIntroMessage(
             draftIntroMessageInput,
+            toolScope,
+            requesterProfile,
+            attendee.event,
           );
-          Logger.log('outputDraftIntroMessage', outputDraftIntroMessage);
+          Logger.log(
+            'outputDraftIntroMessage',
+            outputDraftIntroMessage.output_parsed ?? '',
+          );
           functionCallOutputs.push({
             type: 'function_call_output',
             call_id: resFunc.call_id,
-            output: JSON.stringify(outputDraftIntroMessage),
+            output: JSON.stringify(outputDraftIntroMessage.output_parsed),
+          });
+          toolCalls.push({
+            request_id: outputDraftIntroMessage._request_id ?? '',
+            tool_name: 'draft_intro_message',
+            concierge_message_id: '',
+            latency: elapsedMs(startedAt),
+            tokens: outputDraftIntroMessage.usage?.total_tokens ?? 0,
           });
         }
       }
-      Logger.log('functionCallOutputs', functionCallOutputs);
+      const startedAt = Date.now();
       response = await openai.responses.parse({
         model: 'gpt-5.4-mini',
         input: functionCallOutputs,
@@ -191,22 +254,33 @@ export class EventConciergeService {
           format: zodTextFormat(ConciergeMessageSchema, 'conciergeMessage'),
         },
       });
+      toolCalls.push({
+        request_id: response._request_id ?? '',
+        tool_name: 'system processed message',
+        concierge_message_id: '',
+        latency: elapsedMs(startedAt),
+        tokens: response.usage?.total_tokens ?? 0,
+      });
     }
 
-    Logger.log('openai call usage', response.usage);
-    const latency =
-      (response.completed_at ?? dayjs().unix()) - response.created_at;
-    Logger.log(`Latency: ${latency} ms`);
     const finalParsed = response.output_parsed;
 
-    await this.prisma.conciergeMessage.create({
+    const newConciergeMessage = await this.prisma.conciergeMessage.create({
       data: {
         sessionId: conciergeSession.id,
         role: 'ASSISTANT',
         message: finalParsed?.text ?? '',
       },
     });
+    toolCalls.map((toolCall) => {
+      toolCall.concierge_message_id = newConciergeMessage.id;
+      return toolCall;
+    });
 
+    // store to CloudWatch
+    for (const toolCall of toolCalls) {
+      Logger.log('toolCall', toolCall);
+    }
     return finalParsed;
   }
 
@@ -216,8 +290,31 @@ export class EventConciergeService {
     return conciergeMessageRoleToOpenAiRole[role];
   }
 
-  private async toolSearchAttendees(params: SearchAttendeesParams) {
-    const limit = params.limit ?? 5;
+  private toAttendeeProfile(source: AttendeeProfileSource): AttendeeProfile {
+    return {
+      attendeeId: source.id,
+      name: source.name,
+      headline: source.headline ?? '',
+      bio: source.bio ?? '',
+      company: source.company ?? '',
+      role: source.role ?? '',
+      skills: source.skills ?? [],
+      lookingFor: source.lookingFor ?? '',
+    };
+  }
+
+  private normalizeSearchLimit(limit: number | null) {
+    if (limit == null || !Number.isFinite(limit)) {
+      return DEFAULT_SEARCH_LIMIT;
+    }
+    return Math.min(Math.max(Math.trunc(limit), 1), MAX_SEARCH_LIMIT);
+  }
+
+  private async toolSearchAttendees(
+    params: SearchAttendeesParams,
+    scope: ToolScope,
+  ) {
+    const limit = this.normalizeSearchLimit(params.limit);
     const lookingForEmbed = await this.openAiService.embedText(
       params.lookingFor,
     );
@@ -294,8 +391,8 @@ export class EventConciergeService {
       LIMIT $6
       `,
       vectorLiteral,
-      params.eventId,
-      params.attendeeId,
+      scope.eventId,
+      scope.attendeeId,
       normalizedSkills,
       params.lookingFor,
       limit,
@@ -324,10 +421,59 @@ export class EventConciergeService {
         format: zodTextFormat(ScoreMatchResultSchema, 'scoreMatchResult'),
       },
     });
-    return response.output_parsed;
+    return response;
   }
 
-  private async toolDraftIntroMessage(input: DraftIntroMessageParams) {
+  private async toolDraftIntroMessage(
+    input: DraftIntroMessageParams,
+    scope: ToolScope,
+    requester: AttendeeProfile,
+    event: DraftIntroMessageInput['event'],
+  ) {
+    const candidateIds = [...new Set(input.candidate_ids)]
+      .map((id) => id.trim())
+      .filter((id) => id && id !== scope.attendeeId);
+    if (candidateIds.length === 0) {
+      return {
+        _request_id: '',
+        output_parsed: { messages: [] },
+        usage: null,
+      };
+    }
+    const candidateRows = await this.prisma.attendee.findMany({
+      where: {
+        eventId: scope.eventId,
+        id: {
+          in: candidateIds,
+        },
+        openToChat: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        headline: true,
+        bio: true,
+        company: true,
+        role: true,
+        skills: true,
+        lookingFor: true,
+      },
+    });
+    const candidates = candidateRows.map((candidate) =>
+      this.toAttendeeProfile(candidate),
+    );
+    if (candidates.length === 0) {
+      return {
+        _request_id: '',
+        output_parsed: { messages: [] },
+        usage: null,
+      };
+    }
+    const groundedInput: DraftIntroMessageInput = {
+      event,
+      requester,
+      candidates,
+    };
     const openai = this.openAiService.getClient();
     const response = await openai.responses.parse({
       model: 'gpt-5.4-mini',
@@ -341,7 +487,7 @@ export class EventConciergeService {
         },
         {
           role: 'user',
-          content: JSON.stringify(input),
+          content: JSON.stringify(groundedInput),
         },
       ],
       text: {
@@ -352,11 +498,13 @@ export class EventConciergeService {
       },
     });
 
-    const startAt = dayjs(response.completed_at).unix();
-    const endedAt = dayjs(response.created_at).unix();
-    Logger.log(`toolDraftIntroMessage duration: ${endedAt - startAt}`);
+    const serverDuration =
+      response.completed_at == null
+        ? null
+        : response.completed_at - response.created_at;
+    Logger.log(`toolDraftIntroMessage server duration: ${serverDuration}`);
     Logger.log('toolDraftIntroMessage usage', response.usage);
-    return response.output_parsed;
+    return response;
   }
 
   async createFeedback(messageId: string, dto: CreateFeedbackDto) {
