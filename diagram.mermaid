@@ -1,0 +1,41 @@
+sequenceDiagram
+    actor User
+    participant API as NestJS API (event‑concierge.service.ts)
+    participant DB as PostgreSQL (pgvector)
+    participant LLM as OpenAI (Responses API)
+    participant Tools as Backend tools
+    note over User,API: “POST /events/:id/concierge/messages”
+
+    User->>API: Send message (attendeeId, message)
+    API->>DB: Validate & get attendee / session
+    API->>DB: Store user message (conciergeMessage)
+
+    API->>LLM: responses.create(input + tools)
+    LLM-->>API: function_call(search_attendees)
+
+    API->>Tools: search_attendees(eventId, attendeeId, query, skills, lookingFor, limit)
+    Tools->>DB: Find candidates (filter eventId, open_to_chat, skills, lookingFor) with semantic+keyword search
+    Tools->>DB: Calculate initial score (vector + overlap)
+    DB-->>Tools: Top candidates
+    Tools-->>API: {candidates: [...]}
+
+    API->>LLM: responses.create(previous_response_id, function_call_output(search_attendees))
+    LLM-->>API: function_call(score_match)
+
+    API->>Tools: score_match(event, userMessage, requester, candidates)
+    Tools->>LLM: (internal) Use LLM to assign score 0–100, rationale, shared_ground
+    Tools-->>API: {matches: [...]}
+
+    API->>LLM: responses.create(previous_response_id, function_call_output(score_match))
+    LLM-->>API: function_call(draft_intro_message)
+
+    API->>Tools: draft_intro_message(event, requester, selected_candidates, userMessage)
+    Tools->>LLM: (internal) Use LLM to draft intro message
+    Tools-->>API: {messages: [...]}
+
+    API->>LLM: responses.create(previous_response_id, function_call_output(draft_intro_message))
+    LLM-->>API: Assistant message + matches (final text + intent + matches)
+
+    API->>DB: Store assistant message & match suggestions
+    API-->>User: Structured response (text, intent, matches)
+    note over API: Stores every tool call, result, and final message
